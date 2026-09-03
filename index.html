@@ -367,7 +367,7 @@
         };
 
         // ===================================================================
-        //  4. CHARGEMENT LOCAL + PROXY (fallback pour communes & parcelles)
+        //  4. CHARGEMENT LOCAL + PROXY (fallback pour communes)
         // ===================================================================
         async function fetchLocalJSON(filename) {
             try {
@@ -463,16 +463,30 @@
         }
 
         // ===================================================================
-        //  7. GEOJSON PARCELLES CADASTRALES
+        //  7. GEOJSON PARCELLES CADASTRALES (chargé depuis GitHub Release)
         // ===================================================================
         async function loadParcelles() {
+            // D'abord essayer le fichier local (pour le développement)
             const local = await fetchLocalJSON('parcelles-cadastrales-nc.geojson');
             if (local && local.features && local.features.length > 0) {
-                console.log(`✅ Parcelles chargées : ${local.features.length} entités`);
+                console.log(`✅ Parcelles chargées depuis le fichier local : ${local.features.length} entités`);
                 return local;
             }
-            console.warn('Aucun fichier de parcelles trouvé en local.');
-            return { features: [] };
+
+            // Sinon, charger depuis GitHub Release
+            try {
+                const url = 'https://github.com/gunout/dashboard-nc-cpf/releases/download/nc-cadastre/parcelles-cadastrales-nc.geojson';
+                console.log('⏳ Chargement des parcelles depuis GitHub...');
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                if (!data.features || data.features.length === 0) throw new Error('Fichier vide');
+                console.log(`✅ Parcelles chargées depuis GitHub : ${data.features.length} entités`);
+                return data;
+            } catch (e) {
+                console.warn('❌ Échec du chargement des parcelles depuis GitHub :', e.message);
+                return { features: [] };
+            }
         }
 
         // ===================================================================
