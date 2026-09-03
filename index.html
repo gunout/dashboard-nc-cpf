@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🗺️ Dashboard NC – Communes · Parcelles · Foncier</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+    </script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js">
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #f0f2f5;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.96);
+            padding: 18px 22px;
+            border-radius: 14px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.22);
+            min-width: 240px;
+            max-height: 92vh;
+            overflow-y: auto;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        #controls label {
+            display: block;
+            font-weight: 700;
+            color: #1a3b5d;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin: 12px 0 4px 0;
+        }
+        #controls label:first-of-type {
+            margin-top: 0;
+        }
+        #controls select,
+        #controls input[type="text"] {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #d0d7de;
+            font-size: 0.9rem;
+            background: #fafbfc;
+            transition: 0.2s;
+        }
+        #controls select:focus,
+        #controls input:focus {
+            outline: none;
+            border-color: #2a6f97;
+            box-shadow: 0 0 0 3px rgba(42, 111, 151, 0.15);
+        }
+        .ctrl-hint {
+            font-size: 0.7rem;
+            color: #6b7a8a;
+            margin-top: 2px;
+        }
+        .ctrl-divider {
+            border: none;
+            border-top: 1px solid #e9edf2;
+            margin: 12px 0;
+        }
+
+        #legend-container {
+            position: absolute;
+            bottom: 30px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 14px 18px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.13);
+            border-left: 5px solid #2a6f97;
+            display: none;
+            font-size: 0.82rem;
+            max-height: 55vh;
+            overflow-y: auto;
+            backdrop-filter: blur(4px);
+            min-width: 140px;
+        }
+        #legend-container h4 {
+            margin: 0 0 8px 0;
+            font-size: 0.85rem;
+            color: #1a3b5d;
+            letter-spacing: 0.3px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 4px 0;
+        }
+        .color-box {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid #bbb;
+            flex-shrink: 0;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2000;
+            background: rgba(0, 0, 0, 0.78);
+            color: #fff;
+            padding: 20px 40px;
+            border-radius: 60px;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            font-size: 1.1rem;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+        }
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255, 255, 255, 0.25);
+            border-top: 3px solid #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        #error-msg {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1500;
+            background: #dc3545;
+            color: #fff;
+            padding: 12px 28px;
+            border-radius: 10px;
+            display: none;
+            text-align: center;
+            max-width: 85%;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+            font-weight: 500;
+        }
+
+        .leaflet-popup-content {
+            font-size: 0.85rem;
+            min-width: 220px;
+            max-width: 300px;
+        }
+        .popup-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #1a3b5d;
+            border-bottom: 2px solid #e0e7ef;
+            padding-bottom: 4px;
+            margin-bottom: 8px;
+        }
+        .popup-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 2px 0;
+            gap: 12px;
+        }
+        .popup-row .label {
+            color: #4a5d6e;
+        }
+        .popup-row .value {
+            font-weight: 600;
+            color: #0b2a41;
+            text-align: right;
+        }
+
+        .parcelle-popup .badge-typologie {
+            display: inline-block;
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            background: #eef3f7;
+            color: #1a3b5d;
+            margin-top: 4px;
+        }
+
+        @media (max-width: 640px) {
+            #controls {
+                top: 10px;
+                right: 10px;
+                min-width: 180px;
+                padding: 12px 14px;
+                font-size: 0.8rem;
+            }
+            #legend-container {
+                bottom: 10px;
+                right: 10px;
+                font-size: 0.7rem;
+                padding: 10px 12px;
+                max-width: 180px;
+            }
+            .leaflet-popup-content {
+                min-width: 160px;
+                font-size: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading"><div class="spinner"></div><span>Chargement des données…</span></div>
+    <div id="error-msg"></div>
+
+    <div id="map"></div>
+
+    <!-- ===== PANEL DE CONTRÔLE ===== -->
+    <div id="controls">
+        <label for="metric">📊 Indicateur affiché</label>
+        <select id="metric">
+            <option value="PRIVE">🏠 Propriété privée (ha)</option>
+            <option value="COMMUNE">🏛️ Propriété communale (ha)</option>
+            <option value="ETAT">🏢 Domaine de l'État (ha)</option>
+            <option value="TERRE COUTUMIERE">🌿 Terre coutumière (ha)</option>
+        </select>
+
+        <hr class="ctrl-divider" />
+
+        <label for="parcelleFilter">📌 Filtrer parcelles par typologie</label>
+        <select id="parcelleFilter">
+            <option value="all">Toutes les typologies</option>
+            <option value="PRIVE">🏠 Privé</option>
+            <option value="COLLECTIVITE">🏛️ Collectivité</option>
+            <option value="TERRE COUTUMIERE">🌿 Terre coutumière</option>
+            <option value="NON RENSEIGNE">❓ Non renseigné</option>
+            <option value="MIXTE">🔀 Mixte</option>
+        </select>
+        <div class="ctrl-hint">Cliquez sur une parcelle pour voir ses infos</div>
+
+        <hr class="ctrl-divider" />
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;">
+            <span style="font-size:0.7rem; color:#4a5d6e;">🗺️ Fond cadastral</span>
+            <span style="font-size:0.7rem; color:#4a5d6e;">▲ activez en haut à droite</span>
+        </div>
+        <div class="ctrl-hint" style="margin-top:6px;">
+            <span id="parcelleCount" style="font-weight:600;">0</span> parcelles affichées
+        </div>
+    </div>
+
+    <!-- ===== LÉGENDE ===== -->
+    <div id="legend-container">
+        <h4 id="legend-title">Légende</h4>
+        <div id="legend-items"></div>
+    </div>
+
+    <script>
+        // ===================================================================
+        //  1. CARTE & COUCHES DE BASE
+        // ===================================================================
+        const map = L.map('map', {
+            center: [-21.5, 165.5],
+            zoom: 7,
+            zoomControl: true,
+        });
+
+        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap',
+            maxZoom: 19,
+        });
+
+        const cadastre = L.tileLayer.wms(
+            'https://carto.gouv.nc/arcgis/services/plan_parcellaire_informatise/MapServer/WMSServer?', {
+                layers: '0',
+                format: 'image/png',
+                transparent: true,
+                attribution: '&copy; <a href="https://cadastre.gouv.nc/">Gouvernement NC</a>',
+                opacity: 0.5,
+                maxZoom: 18,
+            }
+        );
+
+        const baseLayers = {
+            'OpenStreetMap': osm,
+            'Plan cadastral (WMS)': cadastre,
+        };
+        osm.addTo(map);
+        L.control.layers(baseLayers).addTo(map);
+
+        // ===================================================================
+        //  2. ÉTAT
+        // ===================================================================
+        let communeLayer = null;
+        let currentGeoJSON = { features: [] };
+        let parcelleCluster = null;
+        let allParcelles = [];
+        let parcelleFilter = 'all';
+
+        // ===================================================================
+        //  3. UTILITAIRES
+        // ===================================================================
+        function showError(msg) {
+            const el = document.getElementById('error-msg');
+            el.textContent = '⚠️ ' + msg;
+            el.style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function getColor(val, min, max) {
+            if (max === min) return '#2a6f97';
+            const ratio = (val - min) / (max - min);
+            const r = Math.round(237 - 150 * ratio);
+            const g = Math.round(248 - 180 * ratio);
+            const b = Math.round(177 - 100 * ratio);
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        function formatSurface(surfaceStr) {
+            if (!surfaceStr) return '0 ha';
+            const match = surfaceStr.match(/(\d+)ha\s*(\d+)a\s*(\d+)ca/);
+            if (match) {
+                const ha = parseInt(match[1]) || 0;
+                const a = parseInt(match[2]) || 0;
+                const ca = parseInt(match[3]) || 0;
+                return (ha + a / 100 + ca / 10000).toFixed(2) + ' ha';
+            }
+            return surfaceStr;
+        }
+
+        const TYPOLOGIE_COLORS = {
+            'PRIVE': '#2e7d32',
+            'COLLECTIVITE': '#1565c0',
+            'TERRE COUTUMIERE': '#6a1b9a',
+            'NON RENSEIGNE': '#9e9e9e',
+            'MIXTE': '#f57f17',
+        };
+        const TYPOLOGIE_LABELS = {
+            'PRIVE': '🏠 Privé',
+            'COLLECTIVITE': '🏛️ Collectivité',
+            'TERRE COUTUMIERE': '🌿 Terre coutumière',
+            'NON RENSEIGNE': '❓ Non renseigné',
+            'MIXTE': '🔀 Mixte',
+        };
+
+        // ===================================================================
+        //  4. CHARGEMENT LOCAL + PROXY (fallback pour communes)
+        // ===================================================================
+        async function fetchLocalJSON(filename) {
+            try {
+                const resp = await fetch(filename);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    console.log(`✅ Fichier local chargé : ${filename}`);
+                    return data;
+                }
+            } catch (_) { /* ignore */ }
+            return null;
+        }
+
+        async function fetchWithProxy(url) {
+            const proxies = [
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+                `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+                `https://thingproxy.freeboard.io/fetch/${url}`,
+            ];
+            for (const proxyUrl of proxies) {
+                try {
+                    const resp = await fetch(proxyUrl);
+                    if (resp.ok) {
+                        const text = await resp.text();
+                        try { return JSON.parse(text); } catch (_) { return text; }
+                    }
+                } catch (_) { /* continue */ }
+            }
+            throw new Error('Tous les proxies ont échoué');
+        }
+
+        // ===================================================================
+        //  5. FONCIER (propriété par commune)
+        // ===================================================================
+        async function fetchFoncier() {
+            const local = await fetchLocalJSON('foncier.json');
+            if (local) {
+                let records = local.results || local;
+                if (!Array.isArray(records)) return records;
+                const filtered = records.filter(r => r.type_zone === 'Commune' && String(r.annee) === '2025');
+                const pivot = {};
+                filtered.forEach(r => {
+                    const zone = r.zone;
+                    const nature = r.proprietaire_nature;
+                    const ha = parseFloat(r.superficie_ha) || 0;
+                    if (!pivot[zone]) pivot[zone] = {};
+                    pivot[zone][nature] = (pivot[zone][nature] || 0) + ha;
+                });
+                console.log('✅ Données foncières chargées (local)');
+                return pivot;
+            }
+            try {
+                const url =
+                    'https://data.gouv.nc/api/explore/v2.1/catalog/datasets/repartition-fonciere-par-nature-de-proprietaire/records?limit=500';
+                const data = await fetchWithProxy(url);
+                const records = data.results || [];
+                const filtered = records.filter(r => r.type_zone === 'Commune' && String(r.annee) === '2025');
+                const pivot = {};
+                filtered.forEach(r => {
+                    const zone = r.zone;
+                    const nature = r.proprietaire_nature;
+                    const ha = parseFloat(r.superficie_ha) || 0;
+                    if (!pivot[zone]) pivot[zone] = {};
+                    pivot[zone][nature] = (pivot[zone][nature] || 0) + ha;
+                });
+                console.log('✅ Données foncières chargées (API)');
+                return pivot;
+            } catch (e) {
+                console.warn('Échec chargement foncier :', e);
+                return {};
+            }
+        }
+
+        // ===================================================================
+        //  6. GEOJSON COMMUNES
+        // ===================================================================
+        async function loadGeoJSONCommunes() {
+            const local = await fetchLocalJSON('communes-nc.geojson');
+            if (local && local.features && local.features.length > 0) {
+                console.log('✅ Communes chargées (local)');
+                return local;
+            }
+            const url =
+            'https://data.gouv.nc/api/explore/v2.1/catalog/datasets/communes-nc/exports/geojson?limit=-1';
+            try {
+                const data = await fetchWithProxy(url);
+                if (data.features && data.features.length > 0) {
+                    console.log('✅ Communes chargées (API)');
+                    return data;
+                }
+            } catch (_) {}
+            throw new Error('Impossible de charger les communes.');
+        }
+
+        // ===================================================================
+        //  7. GEOJSON PARCELLES CADASTRALES – CHARGEMENT AVEC PROXY CORS
+        // ===================================================================
+        async function loadParcelles() {
+            // 1) Essayer le fichier local (développement)
+            const local = await fetchLocalJSON('parcelles-cadastrales-nc.geojson');
+            if (local && local.features && local.features.length > 0) {
+                console.log(`✅ Parcelles chargées depuis le fichier local : ${local.features.length} entités`);
+                return local;
+            }
+
+            // 2) Charger depuis la release via proxy CORS (fonctionne à 100%)
+            try {
+                const url = 'https://api.allorigins.win/raw?url=https://github.com/gunout/dashboard-nc-cpf/releases/download/nc-cadastre/parcelles-cadastrales-nc.geojson';
+                console.log('⏳ Chargement des parcelles depuis la release via proxy...');
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                if (!data.features || data.features.length === 0) throw new Error('Fichier vide');
+                console.log(`✅ Parcelles chargées depuis la release (proxy) : ${data.features.length} entités`);
+                return data;
+            } catch (e) {
+                console.warn('❌ Échec du chargement depuis la release :', e.message);
+            }
+
+            // 3) Dernier recours : jsDelivr depuis la branche main (si le fichier y est)
+            try {
+                const url2 = 'https://cdn.jsdelivr.net/gh/gunout/dashboard-nc-cpf/parcelles-cadastrales-nc.geojson';
+                console.log('⏳ Chargement depuis la branche main (jsDelivr)...');
+                const response = await fetch(url2);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.features && data.features.length > 0) {
+                        console.log(`✅ Parcelles chargées depuis la branche main : ${data.features.length} entités`);
+                        return data;
+                    }
+                }
+            } catch (e) {
+                console.warn('❌ Échec de la branche main :', e.message);
+            }
+
+            // 4) Si tout échoue, retourner un tableau vide
+            return { features: [] };
+        }
+
+        // ===================================================================
+        //  8. FUSION COMMUNES + FONCIER
+        // ===================================================================
+        function mergeData(geojson, foncier) {
+            geojson.features.forEach(f => {
+                const name = f.properties.nom_commune || f.properties.nom || f.properties.NAME || f.properties
+                    .commune || '';
+                if (!name) return;
+                const fData = foncier[name] || {};
+                f.properties.PRIVE = fData.PRIVE || 0;
+                f.properties.COMMUNE = fData.COMMUNE || 0;
+                f.properties.ETAT = fData.ETAT || 0;
+                f.properties['TERRE COUTUMIERE'] = fData['TERRE COUTUMIERE'] || 0;
+            });
+            return geojson;
+        }
+
+        // ===================================================================
+        //  9. AFFICHAGE COMMUNES (choroplèthe)
+        // ===================================================================
+        function renderCommunes(geojson, metric) {
+            if (communeLayer) map.removeLayer(communeLayer);
+
+            const values = geojson.features
+                .map(f => f.properties[metric])
+                .filter(v => typeof v === 'number' && !isNaN(v) && v > 0);
+
+            if (values.length === 0) {
+                showError(`Aucune donnée pour "${metric}".`);
+                return;
+            }
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            updateLegend(metric, min, max);
+
+            function style(feature) {
+                const val = feature.properties[metric];
+                const color = (typeof val === 'number' && !isNaN(val) && val > 0) ?
+                    getColor(val, min, max) :
+                    '#e0e0e0';
+                return {
+                    fillColor: color,
+                    fillOpacity: 0.7,
+                    color: 'white',
+                    weight: 1.8,
+                    dashArray: '4 4',
+                };
+            }
+
+            function onEach(feature, layer) {
+                const name = feature.properties.nom_commune || feature.properties.nom || feature.properties.NAME ||
+                    'Inconnue';
+                const val = feature.properties[metric] || 0;
+
+                layer.bindTooltip(`${name}<br><b>${metric}</b> : ${val.toLocaleString()} ha`, {
+                    sticky: true,
+                    className: 'custom-tooltip',
+                });
+
+                const popupContent = `
+                    <div class="custom-popup">
+                        <div class="popup-title">${name}</div>
+                        <div class="popup-row"><span class="label">🏠 Privé :</span> <span class="value">${(feature.properties.PRIVE||0).toFixed(1)} ha</span></div>
+                        <div class="popup-row"><span class="label">🏛️ Communal :</span> <span class="value">${(feature.properties.COMMUNE||0).toFixed(1)} ha</span></div>
+                        <div class="popup-row"><span class="label">🏢 État :</span> <span class="value">${(feature.properties.ETAT||0).toFixed(1)} ha</span></div>
+                        <div class="popup-row"><span class="label">🌿 Terre coutumière :</span> <span class="value">${(feature.properties['TERRE COUTUMIERE']||0).toFixed(1)} ha</span></div>
+                    </div>
+                `;
+                layer.bindPopup(popupContent, { maxWidth: 280 });
+            }
+
+            communeLayer = L.geoJson(geojson, { style, onEachFeature: onEach }).addTo(map);
+
+            try { map.fitBounds(communeLayer.getBounds(), { padding: [20, 20] }); } catch (_) {}
+            document.getElementById('error-msg').style.display = 'none';
+        }
+
+        // ===================================================================
+        //  10. AFFICHAGE PARCELLES (avec clustering)
+        // ===================================================================
+        function renderParcelles(geojson, filter) {
+            if (parcelleCluster) {
+                map.removeLayer(parcelleCluster);
+                parcelleCluster = null;
+            }
+
+            const features = geojson.features || [];
+            const filtered = filter === 'all' ?
+                features :
+                features.filter(f => (f.properties.typologie || '').toUpperCase() === filter.toUpperCase());
+
+            document.getElementById('parcelleCount').textContent = filtered.length;
+
+            if (filtered.length === 0) {
+                parcelleCluster = L.markerClusterGroup({ chunkedLoading: true });
+                return;
+            }
+
+            parcelleCluster = L.markerClusterGroup({
+                chunkedLoading: true,
+                maxClusterRadius: 40,
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: true,
+            });
+
+            const markers = [];
+            filtered.forEach(f => {
+                const coords = f.geometry?.coordinates;
+                if (!coords || coords.length < 2) return;
+                const lat = coords[1];
+                const lng = coords[0];
+                const typo = (f.properties.typologie || 'NON RENSEIGNE').toUpperCase();
+                const color = TYPOLOGIE_COLORS[typo] || '#9e9e9e';
+                const label = TYPOLOGIE_LABELS[typo] || typo;
+
+                const icon = L.divIcon({
+                    html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>`,
+                    className: '',
+                    iconSize: [12, 12],
+                    iconAnchor: [6, 6],
+                });
+
+                const commune = f.properties.commune || 'Inconnue';
+                const surface = formatSurface(f.properties.surface_cadastrale);
+                const nic = f.properties.nic || '—';
+                const numLot = f.properties.num_lot || '—';
+                const section = f.properties.section_cadastrale || '—';
+
+                const popupContent = `
+                    <div class="parcelle-popup">
+                        <div style="font-weight:700;font-size:1rem;color:#1a3b5d;">${commune}</div>
+                        <div class="popup-row"><span class="label">📍 NIC :</span> <span class="value">${nic}</span></div>
+                        <div class="popup-row"><span class="label">📋 Lot :</span> <span class="value">${numLot}</span></div>
+                        <div class="popup-row"><span class="label">📐 Section :</span> <span class="value">${section}</span></div>
+                        <div class="popup-row"><span class="label">📏 Surface :</span> <span class="value">${surface}</span></div>
+                        <div style="margin-top:4px;">
+                            <span class="badge-typologie" style="background:${color}22;color:${color};border:1px solid ${color};">
+                                ${label}
+                            </span>
+                        </div>
+                    </div>
+                `;
+
+                const marker = L.marker([lat, lng], { icon })
+                    .bindPopup(popupContent, { maxWidth: 260 });
+
+                markers.push(marker);
+            });
+
+            parcelleCluster.addLayers(markers);
+            map.addLayer(parcelleCluster);
+        }
+
+        // ===================================================================
+        //  11. LÉGENDE
+        // ===================================================================
+        function updateLegend(metric, min, max) {
+            const container = document.getElementById('legend-container');
+            const title = document.getElementById('legend-title');
+            const items = document.getElementById('legend-items');
+
+            container.style.display = 'block';
+            title.textContent = metric;
+
+            const steps = 5;
+            let html = '';
+            for (let i = 0; i < steps; i++) {
+                const ratio = i / (steps - 1);
+                const val = min + ratio * (max - min);
+                const color = getColor(val, min, max);
+                const displayVal = val.toLocaleString(undefined, { maximumFractionDigits: 1 });
+                html += `
+                    <div class="legend-item">
+                        <div class="color-box" style="background:${color};"></div>
+                        <span>${displayVal}</span>
+                    </div>
+                `;
+            }
+            items.innerHTML = html;
+        }
+
+        // ===================================================================
+        //  12. INITIALISATION
+        // ===================================================================
+        async function init() {
+            try {
+                // Chargement parallèle (sans SERAIL)
+                const [geojsonRaw, foncier, parcelles] = await Promise.all([
+                    loadGeoJSONCommunes(),
+                    fetchFoncier(),
+                    loadParcelles(),
+                ]);
+
+                // Fusion
+                const geojson = mergeData(geojsonRaw, foncier);
+                currentGeoJSON = geojson;
+
+                // Communes
+                const defaultMetric = document.getElementById('metric').value;
+                renderCommunes(geojson, defaultMetric);
+
+                // Parcelles
+                allParcelles = parcelles.features || [];
+                renderParcelles(parcelles, 'all');
+
+                hideLoading();
+            } catch (err) {
+                showError(err.message);
+                console.error(err);
+            }
+        }
+
+        // ===================================================================
+        //  13. INTERACTIONS
+        // ===================================================================
+        document.getElementById('metric').addEventListener('change', function(e) {
+            const selected = e.target.value;
+            if (currentGeoJSON.features && currentGeoJSON.features.length > 0) {
+                renderCommunes(currentGeoJSON, selected);
+            }
+        });
+
+        document.getElementById('parcelleFilter').addEventListener('change', function(e) {
+            const filter = e.target.value;
+            parcelleFilter = filter;
+            const geojson = { features: allParcelles };
+            renderParcelles(geojson, filter);
+        });
+
+        // ===================================================================
+        //  14. LANCEMENT
+        // ===================================================================
+        init();
+    </script>
+
+</body>
+</html>
