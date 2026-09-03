@@ -311,7 +311,6 @@
         // ===================================================================
         let communeLayer = null;
         let currentGeoJSON = { features: [] };
-        let parcelleLayer = null;
         let parcelleCluster = null;
         let allParcelles = [];
         let parcelleFilter = 'all';
@@ -463,30 +462,46 @@
         }
 
         // ===================================================================
-        //  7. GEOJSON PARCELLES CADASTRALES (chargé depuis GitHub Release)
+        //  7. GEOJSON PARCELLES CADASTRALES – CHARGEMENT AVEC CORS CORRIGÉ
         // ===================================================================
         async function loadParcelles() {
-            // D'abord essayer le fichier local (pour le développement)
+            // 1) Essayer le fichier local (développement)
             const local = await fetchLocalJSON('parcelles-cadastrales-nc.geojson');
             if (local && local.features && local.features.length > 0) {
                 console.log(`✅ Parcelles chargées depuis le fichier local : ${local.features.length} entités`);
                 return local;
             }
 
-            // Sinon, charger depuis GitHub Release
+            // 2) Charger depuis jsDelivr (CDN avec CORS activé)
             try {
-                const url = 'https://github.com/gunout/dashboard-nc-cpf/releases/download/nc-cadastre/parcelles-cadastrales-nc.geojson';
-                console.log('⏳ Chargement des parcelles depuis GitHub...');
+                const url = 'https://cdn.jsdelivr.net/gh/gunout/dashboard-nc-cpf/parcelles-cadastrales-nc.geojson';
+                console.log('⏳ Chargement des parcelles depuis jsDelivr...');
                 const response = await fetch(url);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
                 if (!data.features || data.features.length === 0) throw new Error('Fichier vide');
-                console.log(`✅ Parcelles chargées depuis GitHub : ${data.features.length} entités`);
+                console.log(`✅ Parcelles chargées depuis jsDelivr : ${data.features.length} entités`);
                 return data;
             } catch (e) {
-                console.warn('❌ Échec du chargement des parcelles depuis GitHub :', e.message);
-                return { features: [] };
+                console.warn('❌ Échec du chargement depuis jsDelivr :', e.message);
             }
+
+            // 3) Dernier recours : raw.githubusercontent.com (CORS normalement ok)
+            try {
+                const url2 = 'https://raw.githubusercontent.com/gunout/dashboard-nc-cpf/main/parcelles-cadastrales-nc.geojson';
+                console.log('⏳ Chargement depuis raw.githubusercontent.com...');
+                const response = await fetch(url2);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                if (!data.features || data.features.length === 0) throw new Error('Fichier vide');
+                console.log(`✅ Parcelles chargées depuis raw.github : ${data.features.length} entités`);
+                return data;
+            } catch (e) {
+                console.warn('❌ Échec du chargement depuis raw.github :', e.message);
+            }
+
+            // 4) Si tout échoue, retourner un tableau vide
+            return { features: [] };
         }
 
         // ===================================================================
