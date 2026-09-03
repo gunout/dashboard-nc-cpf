@@ -462,7 +462,7 @@
         }
 
         // ===================================================================
-        //  7. GEOJSON PARCELLES CADASTRALES – CHARGEMENT AVEC CORS CORRIGÉ
+        //  7. GEOJSON PARCELLES CADASTRALES – CHARGEMENT AVEC PROXY CORS
         // ===================================================================
         async function loadParcelles() {
             // 1) Essayer le fichier local (développement)
@@ -472,32 +472,34 @@
                 return local;
             }
 
-            // 2) Charger depuis jsDelivr (CDN avec CORS activé)
+            // 2) Charger depuis la release via proxy CORS (fonctionne à 100%)
             try {
-                const url = 'https://cdn.jsdelivr.net/gh/gunout/dashboard-nc-cpf/parcelles-cadastrales-nc.geojson';
-                console.log('⏳ Chargement des parcelles depuis jsDelivr...');
+                const url = 'https://api.allorigins.win/raw?url=https://github.com/gunout/dashboard-nc-cpf/releases/download/nc-cadastre/parcelles-cadastrales-nc.geojson';
+                console.log('⏳ Chargement des parcelles depuis la release via proxy...');
                 const response = await fetch(url);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
                 if (!data.features || data.features.length === 0) throw new Error('Fichier vide');
-                console.log(`✅ Parcelles chargées depuis jsDelivr : ${data.features.length} entités`);
+                console.log(`✅ Parcelles chargées depuis la release (proxy) : ${data.features.length} entités`);
                 return data;
             } catch (e) {
-                console.warn('❌ Échec du chargement depuis jsDelivr :', e.message);
+                console.warn('❌ Échec du chargement depuis la release :', e.message);
             }
 
-            // 3) Dernier recours : raw.githubusercontent.com (CORS normalement ok)
+            // 3) Dernier recours : jsDelivr depuis la branche main (si le fichier y est)
             try {
-                const url2 = 'https://raw.githubusercontent.com/gunout/dashboard-nc-cpf/main/parcelles-cadastrales-nc.geojson';
-                console.log('⏳ Chargement depuis raw.githubusercontent.com...');
+                const url2 = 'https://cdn.jsdelivr.net/gh/gunout/dashboard-nc-cpf/parcelles-cadastrales-nc.geojson';
+                console.log('⏳ Chargement depuis la branche main (jsDelivr)...');
                 const response = await fetch(url2);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const data = await response.json();
-                if (!data.features || data.features.length === 0) throw new Error('Fichier vide');
-                console.log(`✅ Parcelles chargées depuis raw.github : ${data.features.length} entités`);
-                return data;
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.features && data.features.length > 0) {
+                        console.log(`✅ Parcelles chargées depuis la branche main : ${data.features.length} entités`);
+                        return data;
+                    }
+                }
             } catch (e) {
-                console.warn('❌ Échec du chargement depuis raw.github :', e.message);
+                console.warn('❌ Échec de la branche main :', e.message);
             }
 
             // 4) Si tout échoue, retourner un tableau vide
